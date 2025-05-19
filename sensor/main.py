@@ -1,8 +1,8 @@
 # main.py
-from adxl345 import ADXL345
-from l3g4200d import L3G4200D
-from hmc5883l import HMC5883L
-from bmp180 import BMP180
+from .adxl345 import ADXL345
+from .l3g4200d import L3G4200D
+from .hmc5883l import HMC5883L
+from .bmp180 import BMP180
 import time
 
 def main():
