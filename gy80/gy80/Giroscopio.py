@@ -6,8 +6,7 @@ class Giroscopio(Sensor):
     def __init__(self):
         super().__init__(0x69)
         self.setup()
-        self.bias = self.calibrate()
-
+        self.bias = self.calibrate(self)
 
 
     def setup(self):
@@ -30,5 +29,6 @@ class Giroscopio(Sensor):
             sum_q += q
             sum_r += r
             time.sleep(0.01)
-        self.bias = (sum_p / samples, sum_q / samples, sum_r / samples)
         print("L3G4200D calibração concluída")
+        return (sum_p / samples, sum_q / samples, sum_r / samples)
+        
