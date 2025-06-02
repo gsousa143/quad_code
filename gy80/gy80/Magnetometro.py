@@ -1,5 +1,5 @@
 import math
-from sensor import Sensor
+from .Sensor import Sensor
 
 class Magnetometro(Sensor):
     def __init__(self):

@@ -1,5 +1,5 @@
 import time
-from sensor import Sensor
+from .Sensor import Sensor
 
 class Barometro(Sensor):
     def __init__(self, oversampling=3):

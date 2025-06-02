@@ -1,6 +1,6 @@
 import time
 from math import pi
-from sensor import Sensor
+from .Sensor import Sensor
 
 class Giroscopio(Sensor):
     def __init__(self):

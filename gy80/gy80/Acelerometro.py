@@ -1,4 +1,4 @@
-from sensor import Sensor
+from .Sensor import Sensor
 
 class Acelerometro(Sensor):
     def __init__(self):
