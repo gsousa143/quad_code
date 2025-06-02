@@ -14,6 +14,6 @@ class Magnetometro(Sensor):
     def read(self):
         data = self.bus.read_i2c_block_data(self.address, 0x03, 6)
         x = self.to_signed(data[0] << 8 | data[1])
-        y = self.to_signed(data[4] << 8 | data[5])
+        y = self.to_signed(data[6] << 8 | data[7])
         heading = math.atan2(y, x)
         return heading

@@ -28,7 +28,7 @@ class Giroscopio(Sensor):
             p, q, r = self.read()
             sum_p += p
             sum_q += q
-            sum_q += q
+            sum_r += r
             time.sleep(0.01)
         self.bias = (sum_p / samples, sum_q / samples, sum_r / samples)
         print("L3G4200D calibração concluída")

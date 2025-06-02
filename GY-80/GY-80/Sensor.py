@@ -18,3 +18,5 @@ class Sensor:
 
     def to_signed(self, val):
         return val - 65536 if val > 32767 else val
+    def close(self):
+        self.bus.close()
