@@ -1,14 +1,13 @@
 import time
+from math import pi
 from sensor import Sensor
 
-class L3G4200D(Sensor):
+class Giroscopio(Sensor):
     def __init__(self):
         super().__init__(0x69)
         self.setup()
         self.bias = self.calibrate()
-        self.x = 0
-        self.y = 0
-        self.z = 0
+
 
 
     def setup(self):
@@ -17,19 +16,19 @@ class L3G4200D(Sensor):
 
     def read(self):
         data = self.bus.read_i2c_block_data(self.address, 0x28 | 0x80, 6)
-        x = self.to_signed(data[1] << 8 | data[0])
-        y = self.to_signed(data[3] << 8 | data[2])
-        z = self.to_signed(data[5] << 8 | data[4])
-        return x - self.bias[0], y - self.bias[1], z - self.bias[2]
+        p = (self.to_signed(data[1] << 8 | data[0]) - self.bias[0]) * 0.07 * pi / 180
+        q = (self.to_signed(data[3] << 8 | data[2]) - self.bias[1]) * 0.07 * pi / 180
+        r = (self.to_signed(data[5] << 8 | data[4]) - self.bias[2]) * 0.07 * pi / 180
+        return p, q, r
 
     def calibrate(self, samples=500):
         print("L3G4200D inicializando a calibração")
-        sum_x = sum_y = sum_z = 0
+        sum_p = sum_q = sum_r = 0
         for _ in range(samples):
-            x, y, z = self.read()
-            sum_x += x
-            sum_y += y
-            sum_z += z
+            p, q, r = self.read()
+            sum_p += p
+            sum_q += q
+            sum_q += q
             time.sleep(0.01)
-        self.bias = (sum_x / samples, sum_y / samples, sum_z / samples)
+        self.bias = (sum_p / samples, sum_q / samples, sum_r / samples)
         print("L3G4200D calibração concluída")

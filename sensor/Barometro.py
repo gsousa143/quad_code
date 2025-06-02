@@ -1,14 +1,11 @@
 import time
 from sensor import Sensor
 
-class BMP180(Sensor):
+class Barometro(Sensor):
     def __init__(self, oversampling=3):
         super().__init__(0x77)
         self.oversampling = oversampling
         self.c = self.read_calibration()
-        self.pressure = 0
-        self.temperature = 0
-        self.altitude = 0
         self.pressure_at_sea_level = 101325.0
 
     def read_calibration(self):
@@ -27,7 +24,6 @@ class BMP180(Sensor):
         return c
 
     def read(self):
-        # Temperatura
         self.write_byte_data(0xF4, 0x2E)
         time.sleep(0.005)
         ut = (self.read_byte_data(0xF6) << 8) + self.read_byte_data(0xF7)
@@ -43,7 +39,6 @@ class BMP180(Sensor):
         X1 = ((ut - self.c['AC6']) * self.c['AC5']) >> 15
         X2 = (self.c['MC'] << 11) // (X1 + self.c['MD'])
         B5 = X1 + X2
-        self.temperature = ((B5 + 8) >> 4) / 10.0
 
         B6 = B5 - 4000
         X1 = (self.c['B2'] * ((B6 * B6) >> 12)) >> 11
@@ -65,10 +60,10 @@ class BMP180(Sensor):
         X1 = (p >> 8) * (p >> 8)
         X1 = (X1 * 3038) >> 16
         X2 = (-7357 * p) >> 16
-        self.pressure = p + ((X1 + X2 + 3791) >> 4)
+        pressure = p + ((X1 + X2 + 3791) >> 4)
 
         # Altitude
-        self.altitude = 44330.0 * (1.0 - (self.pressure / self.pressure_at_sea_level) ** (1 / 5.255))
+        altitude = 44330.0 * (1.0 - (pressure / self.pressure_at_sea_level) ** (1 / 5.255))
 
-        return self.temperature, self.pressure, self.altitude
+        return altitude
 
