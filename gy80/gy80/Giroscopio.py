@@ -6,8 +6,8 @@ class Giroscopio(Sensor):
     def __init__(self):
         super().__init__(0x69)
         self.setup()
-        self.bias = self.calibrate(self)
-
+        self.bias = (0.0, 0.0, 0.0)
+        self.bias = self.calibrate()
 
     def setup(self):
         self.write_byte_data(0x20, 0x0F)
