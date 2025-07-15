@@ -1,13 +1,11 @@
-from .Sensor import Sensor
+from .SensorI2C import SensorI2C
 
-class Acelerometro(Sensor):
+class Acelerometro(SensorI2C):
     def __init__(self):
         super().__init__(0x53)
-        self.setup()
-
-    def setup(self):
         self.write_byte_data(0x2D, 0x08)
         self.write_byte_data(0x31, 0x08)
+        
 
     def read(self):
         data = self.bus.read_i2c_block_data(self.address, 0x32, 6)

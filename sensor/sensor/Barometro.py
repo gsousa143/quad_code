@@ -1,28 +1,31 @@
 import time
-from .Sensor import Sensor
+from .SensorI2C import SensorI2C
 
-class Barometro(Sensor):
+class Barometro(SensorI2C):
     def __init__(self, oversampling=3):
         super().__init__(0x77)
+        self.altitude_inicial = 0.0
         self.oversampling = oversampling
-        self.c = self.read_calibration()
+        self.c = {}
         self.pressure_at_sea_level = 101325.0
+        self.calibrate()
 
-    def read_calibration(self):
-        c = {}
-        c['AC1'] = self.to_signed(self.read_word_be(0xAA))
-        c['AC2'] = self.to_signed(self.read_word_be(0xAC))
-        c['AC3'] = self.to_signed(self.read_word_be(0xAE))
-        c['AC4'] = self.read_word_be(0xB0)
-        c['AC5'] = self.read_word_be(0xB2)
-        c['AC6'] = self.read_word_be(0xB4)
-        c['B1'] = self.to_signed(self.read_word_be(0xB6))
-        c['B2'] = self.to_signed(self.read_word_be(0xB8))
-        c['MB'] = self.to_signed(self.read_word_be(0xBA))
-        c['MC'] = self.to_signed(self.read_word_be(0xBC))
-        c['MD'] = self.to_signed(self.read_word_be(0xBE))
-        return c
-
+    def calibrate(self):
+        print("BMP180 inicializando a calibração...")
+        self.c['AC1'] = self.to_signed(self.read_word_be(0xAA))
+        self.c['AC2'] = self.to_signed(self.read_word_be(0xAC))
+        self.c['AC3'] = self.to_signed(self.read_word_be(0xAE))
+        self.c['AC4'] = self.read_word_be(0xB0)
+        self.c['AC5'] = self.read_word_be(0xB2)
+        self.c['AC6'] = self.read_word_be(0xB4)
+        self.c['B1'] = self.to_signed(self.read_word_be(0xB6))
+        self.c['B2'] = self.to_signed(self.read_word_be(0xB8))
+        self.c['MB'] = self.to_signed(self.read_word_be(0xBA))
+        self.c['MC'] = self.to_signed(self.read_word_be(0xBC))
+        self.c['MD'] = self.to_signed(self.read_word_be(0xBE))
+        self.altitude_inicial = self.read()
+        print("BMP180 calibração concluída!")
+        
     def read(self):
         self.write_byte_data(0xF4, 0x2E)
         time.sleep(0.005)
@@ -63,7 +66,7 @@ class Barometro(Sensor):
         pressure = p + ((X1 + X2 + 3791) >> 4)
 
         # Altitude
-        altitude = 44330.0 * (1.0 - (pressure / self.pressure_at_sea_level) ** (1 / 5.255))
+        altitude = 44330.0 * (1.0 - (pressure / self.pressure_at_sea_level) ** (1 / 5.255)) - self.altitude_inicial
 
         return altitude
 

@@ -1,17 +1,15 @@
 import time
 from math import pi
-from .Sensor import Sensor
+from .SensorI2C import SensorI2C
 
-class Giroscopio(Sensor):
+class Giroscopio(SensorI2C):
     def __init__(self):
         super().__init__(0x69)
-        self.setup()
+        self.write_byte_data(0x20, 0x0F)
+        self.write_byte_data(0x23, 0x30)
         self.bias = (0.0, 0.0, 0.0)
         self.bias = self.calibrate()
 
-    def setup(self):
-        self.write_byte_data(0x20, 0x0F)
-        self.write_byte_data(0x23, 0x30)
 
     def read(self):
         data = self.bus.read_i2c_block_data(self.address, 0x28 | 0x80, 6)
@@ -21,7 +19,7 @@ class Giroscopio(Sensor):
         return p, q, r
 
     def calibrate(self, samples=500):
-        print("L3G4200D inicializando a calibração")
+        print("L3G4200D inicializando a calibração...")
         sum_p = sum_q = sum_r = 0
         for _ in range(samples):
             p, q, r = self.read()
@@ -29,6 +27,6 @@ class Giroscopio(Sensor):
             sum_q += q
             sum_r += r
             time.sleep(0.01)
-        print("L3G4200D calibração concluída")
+        print("L3G4200D calibração concluída!")
         return (sum_p / samples, sum_q / samples, sum_r / samples)
         

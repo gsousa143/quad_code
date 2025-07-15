@@ -1,16 +1,23 @@
-import math
 import time
 import serial
+from control import PID_quad
 from gy80 import Acelerometro, Giroscopio, Magnetometro, Barometro
-from random import random as rand
+import numpy as np
 
 class Quad:
-    def __init__(self):
-        # Estado do drone
-        self.x = self.y = self.z = 0.0
-        self.phi = self.theta = self.psi = 0.0
-        self.u = self.v = self.w = 0.0
-        self.p = self.q = self.r = 0.0
+    def __init__(self, initial_state = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])):
+        self.x = initial_state[0]
+        self.y = initial_state[1]
+        self.z = initial_state[2]
+        self.phi = initial_state[3]
+        self.theta = initial_state[4]
+        self.psi = initial_state[5]
+        self.u = initial_state[6]
+        self.v = initial_state[7]
+        self.w = initial_state[8]
+        self.p = initial_state[9]
+        self.q = initial_state[10]
+        self.r = initial_state[11]
 
         # Sensores
         self.acc = Acelerometro()
@@ -36,20 +43,20 @@ class Quad:
         }
 
     def matriz_rotacao(self):
-        c_phi = math.cos(self.phi)
-        s_phi = math.sin(self.phi)
-        c_theta = math.cos(self.theta)
-        s_theta = math.sin(self.theta)
-        c_psi = math.cos(self.psi)
-        s_psi = math.sin(self.psi)
+        c_phi = np.cos(self.phi)
+        s_phi = np.sin(self.phi)
+        c_theta = np.cos(self.theta)
+        s_theta = np.sin(self.theta)
+        c_psi = np.cos(self.psi)
+        s_psi = np.sin(self.psi)
 
-        return [
-            [c_psi * c_theta, c_psi * s_theta * s_phi - s_psi * c_phi, c_psi * s_theta * c_phi + s_psi * s_phi],
-            [s_psi * c_theta, s_psi * s_theta * s_phi + c_psi * c_phi, s_psi * s_theta * c_phi - c_psi * s_phi],
-            [-s_theta,         c_theta * s_phi,                        c_theta * c_phi]
-        ]
+        return np.array([
+            [c_psi*c_theta, c_psi*s_theta*s_phi - s_psi*c_phi, c_psi*s_theta*c_phi + s_psi*s_phi],
+            [s_psi*c_theta, s_psi*s_theta*s_phi + c_psi*c_phi, s_psi*s_theta*c_phi - c_psi*s_phi],
+            [-s_theta,      c_theta*s_phi,                     c_theta*c_phi]
+        ])
 
-    def atualizar_estado(self, dt):
+    def att_state(self, dt):
         sensores = self.ler_sensores()
         ax, ay, az = sensores['acc']
         p_meas, q_meas, r_meas = sensores['gyro']
@@ -58,55 +65,57 @@ class Quad:
 
         # Atualiza taxas angulares e integra orientação
         self.p, self.q, self.r = p_meas, q_meas, r_meas
-        self.phi += self.p * dt
-        self.theta += self.q * dt
-        self.psi += self.r * dt
+        self.phi += self.p*dt
+        self.theta += self.q*dt
+        self.psi += self.r*dt
 
         # Correção do yaw com o magnetômetro
-        self.psi = 0.98 * self.psi + 0.02 * heading
+        self.psi = 0.9*self.psi + 0.1*heading
+
+        # Normaliza para [-π, π]
+        self.phi = (self.phi + 2 * np.pi) % (2 * np.pi) - np.pi
+        self.theta = (self.theta + 2 * np.pi) % (2 * np.pi) - np.pi
+        self.psi = (self.psi + 2 * np.pi) % (2 * np.pi) -np.pi
 
         # Subtrai gravidade da aceleração medida
         R = self.matriz_rotacao()
         g = 9.81
-        gravidade_corpo = [-R[0][2] * g, -R[1][2] * g, -R[2][2] * g]
+        gravidade_corpo = [-R[0][2]*g, -R[1][2]*g, -R[2][2]*g]
 
-        ax_lin = ax - gravidade_corpo[0]
-        ay_lin = ay - gravidade_corpo[1]
-        az_lin = az - gravidade_corpo[2]
 
-        self.u += ax_lin * dt
-        self.v += ay_lin * dt
-        self.w += az_lin * dt
+        self.u += (ax - gravidade_corpo[0])*dt
+        self.v += (ay - gravidade_corpo[1])*dt
+        self.w += (az - gravidade_corpo[2])*dt
 
         vel_mundo = [
-            R[0][0] * self.u + R[0][1] * self.v + R[0][2] * self.w,
-            R[1][0] * self.u + R[1][1] * self.v + R[1][2] * self.w,
-            R[2][0] * self.u + R[2][1] * self.v + R[2][2] * self.w
+            R[0][0]*self.u + R[0][1]*self.v + R[0][2]*self.w,
+            R[1][0]*self.u + R[1][1]*self.v + R[1][2]*self.w,
+            R[2][0]*self.u + R[2][1]*self.v + R[2][2]*self.w
         ]
 
-        self.x += vel_mundo[0] * dt
-        self.y += vel_mundo[1] * dt
-        self.z = altitude  # usa altitude do barômetro
+        self.x += vel_mundo[0]*dt
+        self.y += vel_mundo[1]*dt
+        self.z += vel_mundo[1]*dt  # usa altitude do barômetro
+        self.z =  0.9*self.z + 0.1*altitude  # filtro complementar para altitude
 
-        return sensores
 
     def estado_atual(self):
         return {
             'posicao': (self.x, self.y, self.z),
             'orientacao': (
-                math.degrees(self.phi),
-                math.degrees(self.theta),
-                (math.degrees(self.psi) + 360) % 360
+                np.degrees(self.phi),
+                np.degrees(self.theta),
+                (np.degrees(self.psi) + 360) % 360
             ),
             'vel_linear': (self.u, self.v, self.w),
             'vel_angular': (
-                math.degrees(self.p),
-                math.degrees(self.q),
-                math.degrees(self.r)
+                np.degrees(self.p),
+                np.degrees(self.q),
+                np.degrees(self.r)
             )
         }
 
-    def imprimir_estado(self, sensores):
+    def imprimir_estado(self, estado, sensores):
         estado = self.estado_atual()
 
         print(f"\n--- ESTADO ESTIMADO DO DRONE ---")
@@ -120,39 +129,7 @@ class Quad:
         print(f"\n--- LEITURAS DOS SENSORES ---")
         print(f"Acelerômetro (m/s²): ax={sensores['acc'][0]:.2f}, ay={sensores['acc'][1]:.2f}, az={sensores['acc'][2]:.2f}")
         print(f"Giroscópio (rad/s): p={sensores['gyro'][0]:.2f}, q={sensores['gyro'][1]:.2f}, r={sensores['gyro'][2]:.2f}")
-        print(f"Magnetômetro (heading): {math.degrees(sensores['mag']):.2f}°")
+        print(f"Magnetômetro (heading): {np.degrees(sensores['mag']):.2f}°")
         print(f"Barômetro (altitude): {sensores['bar']:.2f} m")
 
 
-    def controle(self, setpoint=[]):
-        # Comando de controle aleatório (substitua por seu controlador real)
-        u = [0.1*rand() for _ in range(4)]
-
-        # Garante que valores estejam entre 0.0 e 1.0
-        u = [max(0.0, min(0.1, val)) for val in u]
-
-        # Constrói string para o Arduino
-        comando = ','.join(f"{val:.3f}" for val in u) + '\n'
-        # Envia comando pela serial
-        if self.serial.is_open:
-            self.serial.write(comando.encode('utf-8'))
-            print(f"[Serial] Comando enviado: {comando.strip()}")
-
-# Loop principal
-if __name__ == "__main__":
-    quad = Quad()
-    intervalo = 0.1  # 10 Hz
-    duracao = float(input("Digite o tempo de coleta em segundos: "))
-    fim = time.time() + duracao
-    t_ultimo = time.time()
-
-    while time.time() < fim:
-        t_atual = time.time()
-        dt = t_atual - t_ultimo
-        t_ultimo = t_atual
-
-        sensores = quad.atualizar_estado(dt)
-        quad.imprimir_estado(sensores)
-        quad.controle()
-
-        time.sleep(intervalo)

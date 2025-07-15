@@ -1,6 +1,6 @@
 import smbus
 
-class Sensor:
+class SensorI2C:
     def __init__(self, address, bus_num=1):
         self.bus = smbus.SMBus(bus_num)
         self.address = address
@@ -18,5 +18,6 @@ class Sensor:
 
     def to_signed(self, val):
         return val - 65536 if val > 32767 else val
+    
     def close(self):
         self.bus.close()
