@@ -1,10 +1,13 @@
+
 import time
 import serial
 from sensor import Sensor
+from control import pid_quad
 import numpy as np
 
 class Quad:
-    def __init__(self, initial_state = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]):
+    def __init__(self, dt=0.5, initial_state = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]):
+        self.dt = dt # Intervalo de tempo para atualização
         self.x = initial_state[0]
         self.y = initial_state[1]
         self.z = initial_state[2]
@@ -19,6 +22,8 @@ class Quad:
         self.r = initial_state[11]
         # Inicializa o sensor
         self.sensor = Sensor()
+        # Inicializa o controlador PID para quadricóptero
+        self.pid = pid_quad(T=self.dt)
 
         # Comunicação serial com Arduino
         self.serial = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)  # Ajuste a porta conforme necessário
@@ -39,7 +44,7 @@ class Quad:
             [-s_theta,      c_theta*s_phi,                     c_theta*c_phi]
         ]
 
-    def att_state(self, dt):
+    def att_state(self):
         sensores = self.sensor.read()
         ax, ay, az = sensores['acc']
         p_meas, q_meas, r_meas = sensores['gyro']
@@ -48,9 +53,9 @@ class Quad:
 
         # Atualiza taxas angulares e integra orientação
         self.p, self.q, self.r = p_meas, q_meas, r_meas
-        self.phi += self.p*dt
-        self.theta += self.q*dt
-        self.psi += self.r*dt
+        self.phi += self.p*self.dt
+        self.theta += self.q*self.dt
+        self.psi += self.r*self.dt
 
         # Correção do yaw com o magnetômetro
         self.psi = 0.7*self.psi + 0.3*heading
@@ -66,9 +71,9 @@ class Quad:
         gravidade_corpo = [-R[0][2]*g, -R[1][2]*g, -R[2][2]*g]
 
 
-        self.u += (ax - gravidade_corpo[0])*dt
-        self.v += (ay - gravidade_corpo[1])*dt
-        self.w += (az - gravidade_corpo[2])*dt
+        self.u += (ax - gravidade_corpo[0])*self.dt
+        self.v += (ay - gravidade_corpo[1])*self.dt
+        self.w += (az - gravidade_corpo[2])*self.dt
 
         vel_mundo = [
             R[0][0]*self.u + R[0][1]*self.v + R[0][2]*self.w,
@@ -76,31 +81,50 @@ class Quad:
             R[2][0]*self.u + R[2][1]*self.v + R[2][2]*self.w
         ]
 
-        self.x += vel_mundo[0]*dt
-        self.y += vel_mundo[1]*dt
-        self.z += vel_mundo[1]*dt  # usa altitude do barômetro
+        self.x += vel_mundo[0]*self.dt
+        self.y += vel_mundo[1]*self.dt
+        self.z += vel_mundo[1]*self.dt  # usa altitude do barômetro
         self.z =  0.7*self.z + 0.3*altitude  # filtro complementar para altitude
 
 
-    def log_estado(self):
-        print(f"Estado atual: \nx={self.x:.2f}, y={self.y:.2f}, z={self.z:.2f}, "
-              f"phi={self.phi:.2f}, theta={self.theta:.2f}, psi={self.psi:.2f}, "
-              f"u={self.u:.2f}, v={self.v:.2f}, w={self.w:.2f}, "
-              f"p={self.p:.2f}, q={self.q:.2f}, r={self.r:.2f}")
-        print("-------------------------------")
+
+def log_estado(self):
+    """
+    Imprime o log de estado do sistema, com os ângulos de atitude em graus.
+    """
+    # Converte os ângulos de radianos para graus para melhor legibilidade
+    phi_deg = np.degrees(self.phi)
+    theta_deg = np.degrees(self.theta)
+    psi_deg = np.degrees(self.psi)
+
+    log_formatado = f"""
+    Posição (m):        x={self.x: 8.2f}, y={self.y: 8.2f}, z={self.z: 8.2f}
+    Atitude (°):        φ={phi_deg: 8.2f}, θ={theta_deg: 8.2f}, ψ={psi_deg: 8.2f}
+    Vel. Linear (m/s):  u={self.u: 8.2f}, v={self.v: 8.2f}, w={self.w: 8.2f}
+    Vel. Angular (rad/s): p={self.p: 8.2f}, q={self.q: 8.2f}, r={self.r: 8.2f}
+    """
+    print(log_formatado)
         
 
 
 if __name__ == "__main__":
     quad = Quad()
-    dt = 0.5  # Intervalo de tempo para atualização
+    
 
     try:
         while True:
-            quad.att_state(dt)
+            tic = time.time()
+            quad.att_state()
             quad.sensor.log()
+            w1, w2, w3, w4 = quad.pid.control(quad.x, quad.y, quad.z, quad.phi, quad.theta, quad.psi,
+                                            x_sp=0.0, y_sp=0.0, z_sp=1.0, yaw_sp=0.0)
+            command = f"{w1:.4f} {w2:.4f} {w3:.4f} {w4:.4f}\n"
+            quad.serial.write(command.encode())
+            print(f"Comando enviado: {command.strip()}")
             quad.log_estado()
-            time.sleep(dt)
+            toc = time.time()
+            elapsed = toc - tic
+            print(f"Tempo de execução: {elapsed:.4f} segundos")
     except KeyboardInterrupt:
         print("Simulação interrompida.")
     finally:

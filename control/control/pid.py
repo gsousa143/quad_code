@@ -1,4 +1,4 @@
-class PID:
+class pid:
     '''A class for a discrete time PID controller.'''
     def __init__(self, T, kp=0, ki=0, kd=0, saturation=None):
         self.kp = kp

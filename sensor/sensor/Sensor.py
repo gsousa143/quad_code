@@ -30,8 +30,15 @@ class Sensor:
         }
     
     def log(self):
-        print(f"Acelerômetro (m/s^2): \t \t ax:{self.ax}, ay:{self.ay}, az:{self.az}")
-        print(f"Giroscópio: (rad/s): \t \t p:{self.p}, q:{self.q}, r:{self.r}")
-        print(f"Magnetômetro: (T): \t \t mx:{self.mx}, my:{self.my}, mz:{self.mz}, heading:{self.heading} rad")
-        print(f"Barômetro: (m): \t \t z:{self.z_bar}")
-        print("--------------------------------------------")
+    # Rótulos alinhados à esquerda em um espaço de 22 caracteres para organização.
+    # Valores de ponto flutuante (float) formatados para exibir 4 casas decimais.
+    print(f"{'Acelerômetro (m/s²)'_:<22}: ax:{self.ax: .4f}, ay:{self.ay: .4f}, az:{self.az: .4f}")
+    print(f"{'Giroscópio (rad/s)'_:<22}: p:{self.p: .4f}, q:{self.q: .4f}, r:{self.r: .4f}")
+    print(f"{'Magnetômetro (µT)'_:<22}: mx:{self.mx: .4f}, my:{self.my: .4f}, mz:{self.mz: .4f}")
+    
+    # Converte o heading de radianos para graus para facilitar a leitura.
+    heading_em_graus = math.degrees(self.heading)
+    print(f"{'Heading':<22}: {self.heading: .4f} rad ({heading_em_graus:.2f}°)")
+    
+    print(f"{'Barômetro (m)':<22}: z:{self.z_bar: .4f}")
+  
