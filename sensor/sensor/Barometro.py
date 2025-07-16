@@ -1,14 +1,26 @@
 import time
+from collections import deque
 from .SensorI2C import SensorI2C
 
 class Barometro(SensorI2C):
-    def __init__(self, oversampling=3):
+    def __init__(self, oversampling=3, janela=5):
         super().__init__(0x77)
-        self.altitude_inicial = 0.0
         self.oversampling = oversampling
-        self.c = {}
+        self.janela = janela
         self.pressure_at_sea_level = 101325.0
+        self.c = {}
+        self.buffer_altitude = deque(maxlen=janela)
+        
         self.calibrate()
+
+        # Preenche o buffer inicial com leituras reais
+        for _ in range(janela):
+            alt = self._read_raw()
+            self.buffer_altitude.append(alt)
+            time.sleep(0.01)  # pequeno delay para estabilidade
+
+        # Define altitude inicial como a média inicial do buffer
+        self.altitude_inicial = sum(self.buffer_altitude) / len(self.buffer_altitude)
 
     def calibrate(self):
         print("BMP180 inicializando a calibração...")
@@ -23,10 +35,10 @@ class Barometro(SensorI2C):
         self.c['MB'] = self.to_signed(self.read_word_be(0xBA))
         self.c['MC'] = self.to_signed(self.read_word_be(0xBC))
         self.c['MD'] = self.to_signed(self.read_word_be(0xBE))
-        self.altitude_inicial = self.read()
         print("BMP180 calibração concluída!")
-        
-    def read(self):
+
+    def _read_raw(self):
+        # Temperatura
         self.write_byte_data(0xF4, 0x2E)
         time.sleep(0.005)
         ut = (self.read_byte_data(0xF6) << 8) + self.read_byte_data(0xF7)
@@ -39,10 +51,12 @@ class Barometro(SensorI2C):
         xlsb = self.read_byte_data(0xF8)
         up = ((msb << 16) + (lsb << 8) + xlsb) >> (8 - self.oversampling)
 
+        # Cálculo de temperatura compensada
         X1 = ((ut - self.c['AC6']) * self.c['AC5']) >> 15
         X2 = (self.c['MC'] << 11) // (X1 + self.c['MD'])
         B5 = X1 + X2
 
+        # Cálculo de pressão compensada
         B6 = B5 - 4000
         X1 = (self.c['B2'] * ((B6 * B6) >> 12)) >> 11
         X2 = (self.c['AC2'] * B6) >> 11
@@ -65,8 +79,12 @@ class Barometro(SensorI2C):
         X2 = (-7357 * p) >> 16
         pressure = p + ((X1 + X2 + 3791) >> 4)
 
-        # Altitude
-        altitude = 44330.0 * (1.0 - (pressure / self.pressure_at_sea_level) ** (1 / 5.255)) - self.altitude_inicial
-
+        # Cálculo da altitude em metros
+        altitude = 44330.0 * (1.0 - (pressure / self.pressure_at_sea_level) ** (1 / 5.255))
         return altitude
 
+    def read(self):
+        nova_altitude = self._read_raw() - self.altitude_inicial
+        self.buffer_altitude.append(nova_altitude)
+        media = sum(self.buffer_altitude) / len(self.buffer_altitude)
+        return media
